@@ -1,0 +1,59 @@
+{
+  "repo": {
+    "path": "./repo",
+    "password": "请修改为你的仓库密码"
+  },
+  "notify": {
+    "webhook": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=你的webhook-key",
+    "wedrive_enabled": false,
+    "max_webhook_size": 20971520,
+    "split_large_files": true,
+    "split_part_size": 18874368
+  },
+  "retention": {
+    "daily": 15,
+    "weekly": 12,
+    "monthly": 12,
+    "yearly": 3
+  },
+  "tasks": [
+    {
+      "name": "检测数据",
+      "source": "\\\\nas\\质量部\\检测数据",
+      "schedule": "daily",
+      "time": "07:30",
+      "include": [],
+      "exclude": ["~$*", "*.tmp"],
+      "exclude_regex": [],
+      "zip_root_files": true,
+      "root_file_patterns": ["*.xlsx", "*.xls"],
+      "notify": {
+        "skip_first_run": true,
+        "incremental": true
+      },
+      "enabled": true
+    },
+    {
+      "name": "原辅料质量管理",
+      "source": "\\\\nas\\质量部\\01_原辅料质量管理",
+      "schedule": "daily",
+      "time": "07:30",
+      "exclude": ["~$*"],
+      "zip_root_files": true,
+      "notify": {
+        "skip_first_run": true,
+        "incremental": true
+      },
+      "enabled": true
+    },
+    {
+      "name": "月度归档",
+      "source": "\\\\nas\\质量部\\月度报告",
+      "schedule": "monthly",
+      "time": "02:00",
+      "monthday": 1,
+      "zip_root_files": false,
+      "enabled": false
+    }
+  ]
+}

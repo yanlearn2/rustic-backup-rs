@@ -1,0 +1,27 @@
+[package]
+name = "rustic-backup"
+version = "0.1.0"
+edition = "2021"
+description = "Rustic 备份管理工具 - 配置驱动的自动化备份系统"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", features = ["blocking", "json", "multipart"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+tar = "0.4"
+flate2 = "1"
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1"
+regex = "1"
+globset = "0.4"
+tempfile = "3"
+walkdir = "2"
+inquire = "0.7"
+encoding_rs = "0.8"
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
