@@ -21,6 +21,9 @@ walkdir = "2"
 inquire = "0.7"
 encoding_rs = "0.8"
 
+[build-dependencies]
+winres = "0.1"
+
 [profile.release]
 opt-level = 3
 lto = true
