@@ -32,7 +32,7 @@ struct Cli {
     config: String,
 
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -132,9 +132,15 @@ fn main() {
 }
 
 fn run(cli: Cli) -> Result<()> {
-    let config_path = PathBuf::from(&cli.config);
+    let config_path = resolve_config_path(&cli.config);
 
-    match &cli.command {
+    // 没有子命令时进入交互式主菜单
+    let command = match cli.command {
+        Some(c) => c,
+        None => return cmd_menu(&config_path),
+    };
+
+    match &command {
         Commands::GenConfig => {
             return cmd_gen_config(&config_path);
         }
@@ -192,6 +198,27 @@ fn run(cli: Cli) -> Result<()> {
             return cmd_prune(&config, &logger, *task, *dry_run, *yes);
         }
     }
+}
+
+/// 自动定位配置文件：当前目录优先，其次 exe 所在目录
+fn resolve_config_path(cli_config: &str) -> PathBuf {
+    let current = PathBuf::from(cli_config);
+    if current.exists() {
+        return current;
+    }
+    // 默认 config.json 且当前目录不存在时，尝试 exe 所在目录
+    if cli_config == DEFAULT_CONFIG {
+        if let Some(exe_dir) = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        {
+            let exe_config = exe_dir.join(DEFAULT_CONFIG);
+            if exe_config.exists() {
+                return exe_config;
+            }
+        }
+    }
+    current
 }
 
 fn load_config(path: &Path) -> Result<Config> {
@@ -503,6 +530,99 @@ fn cmd_prune(config: &Config, logger: &Logger, task_idx: Option<usize>, dry_run:
         ));
     } else {
         println!("\n加 --yes 参数确认执行实际清理");
+    }
+
+    Ok(())
+}
+
+/// 交互式主菜单（桌面快捷方式默认启动）
+fn cmd_menu(config_path: &Path) -> Result<()> {
+    use inquire::{Select, Confirm};
+
+    if !config_path.exists() {
+        println!("配置文件不存在: {}", config_path.display());
+        let init = Confirm::new("是否运行配置向导?")
+            .with_default(true)
+            .prompt()?;
+        if init {
+            return setup::run_setup(config_path);
+        }
+        println!("请先运行 'rustic-backup setup' 创建配置");
+        return Ok(());
+    }
+
+    loop {
+        println!();
+        println!("{}", "═".repeat(50));
+        println!("  Rustic Backup 控制台");
+        println!("  配置: {}", config_path.display());
+        println!("{}", "═".repeat(50));
+
+        let choices = vec![
+            "手动执行备份".to_string(),
+            "查看备份状态".to_string(),
+            "查看快照列表".to_string(),
+            "查看任务列表".to_string(),
+            "仓库维护（清理旧快照）".to_string(),
+            "编辑配置".to_string(),
+            "下载/更新 rustic.exe".to_string(),
+            "退出".to_string(),
+        ];
+
+        let choice = Select::new("选择操作:", choices)
+            .prompt()
+            .unwrap_or_else(|_| "退出".to_string());
+
+        println!();
+
+        match choice.as_ref() {
+            "手动执行备份" => {
+                let config = load_config(config_path)?;
+                download::ensure_rustic(config.rustic_path.as_deref())?;
+                let logger = Logger::new(config.log_dir());
+                let force = Confirm::new("强制发送企业微信通知?")
+                    .with_default(false)
+                    .prompt()
+                    .unwrap_or(false);
+                cmd_run(&config, &logger, None, false, force)?;
+            }
+            "查看备份状态" => {
+                let config = load_config(config_path)?;
+                download::ensure_rustic(config.rustic_path.as_deref())?;
+                cmd_status(&config)?;
+            }
+            "查看快照列表" => {
+                let config = load_config(config_path)?;
+                download::ensure_rustic(config.rustic_path.as_deref())?;
+                cmd_list(&config, None, None, None, false)?;
+            }
+            "查看任务列表" => {
+                cmd_tasks(config_path, None, None)?;
+            }
+            "仓库维护（清理旧快照）" => {
+                let config = load_config(config_path)?;
+                download::ensure_rustic(config.rustic_path.as_deref())?;
+                let logger = Logger::new(config.log_dir());
+                let yes = Confirm::new("确认执行实际清理?（不加则只预览）")
+                    .with_default(false)
+                    .prompt()
+                    .unwrap_or(false);
+                cmd_prune(&config, &logger, None, false, yes)?;
+            }
+            "编辑配置" => {
+                setup::run_setup(config_path)?;
+            }
+            "下载/更新 rustic.exe" => {
+                cmd_download()?;
+            }
+            "退出" => break,
+            _ => break,
+        }
+
+        println!();
+        let _ = Confirm::new("按回车继续...")
+            .with_default(true)
+            .prompt();
     }
 
     Ok(())
