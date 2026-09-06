@@ -44,6 +44,9 @@ jobs:
           $sha256 = "${{ steps.hash.outputs.sha256 }}"
           $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 
+          # 先创建目录
+          New-Item -ItemType Directory -Path "manifest\Locale" -Force | Out-Null
+
           # 1. Version manifest
           $versionManifest = @"
           # yaml-language-server: ``$schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json
