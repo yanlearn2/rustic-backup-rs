@@ -78,10 +78,32 @@ impl<'a> Rustic<'a> {
         Ok((stdout, stderr, code))
     }
 
+    /// 检查仓库是否已初始化
+    pub fn is_initialized(&self) -> bool {
+        // rustic 仓库的配置文件是 repo/config
+        self.repo_path.join("config").exists()
+    }
+
+    /// 确保仓库已初始化，未初始化则自动创建
+    pub fn ensure_repo(&self) -> Result<()> {
+        if self.is_initialized() {
+            return Ok(());
+        }
+        println!("仓库未初始化，自动创建: {}", self.repo_path.display());
+        let mut cmd = self.base_cmd();
+        cmd.arg("init");
+        let (stdout, stderr, code) = Self::run_cmd(&mut cmd)?;
+        if code != 0 {
+            return Err(anyhow!("自动初始化仓库失败 (exit {}):\n{}\n{}", code, stdout, stderr));
+        }
+        println!("✅ 仓库初始化成功");
+        Ok(())
+    }
+
     /// 初始化仓库
     pub fn init(&self) -> Result<()> {
-        if self.repo_path.exists() {
-            return Err(anyhow!("仓库已存在: {}", self.repo_path.display()));
+        if self.is_initialized() {
+            return Err(anyhow!("仓库已初始化: {}", self.repo_path.display()));
         }
         let mut cmd = self.base_cmd();
         cmd.arg("init");
@@ -94,6 +116,9 @@ impl<'a> Rustic<'a> {
 
     /// 执行备份，返回快照ID
     pub fn backup(&self, task: &TaskConfig, extra_args: &[&str]) -> Result<String> {
+        // 自动确保仓库已初始化
+        self.ensure_repo()?;
+
         let mut cmd = self.base_cmd();
         cmd.arg("backup");
         cmd.arg(&task.source);
