@@ -115,4 +115,4 @@ jobs:
         env:
           WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
         run: |
-          .\wingetcreate.exe submit --token $env:WINGET_TOKEN --no-open "manifest\yanlearn2.rustic-backup.yaml"
+          .\wingetcreate.exe submit --token $env:WINGET_TOKEN --no-open "manifest"
