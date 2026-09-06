@@ -38,6 +38,7 @@ Source: "dist\rustic-backup.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\config.example.json"; DestDir: "{app}"; Flags: ignoreversion onlyifdoesntexist
 Source: "dist\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\bin\README.txt"; DestDir: "{app}\bin"; Flags: ignoreversion
+Source: "dist\bin\7za.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"

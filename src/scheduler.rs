@@ -329,8 +329,128 @@ impl<'a> Scheduler<'a> {
         Ok(())
     }
 
+    /// 查找 7za.exe（优先程序目录，其次系统 PATH）
+    fn find_7za(&self) -> Option<PathBuf> {
+        // 1. exe 所在目录的 bin/7za.exe
+        if let Some(exe_dir) = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        {
+            let local = exe_dir.join("bin").join("7za.exe");
+            if local.exists() {
+                return Some(local);
+            }
+        }
+        // 2. 系统 PATH
+        for name in &["7za.exe", "7z.exe"] {
+            if let Ok(output) = std::process::Command::new("where")
+                .arg(name)
+                .output()
+            {
+                if output.status.success() {
+                    if let Some(path) = String::from_utf8_lossy(&output.stdout)
+                        .lines()
+                        .next()
+                        .map(|s| PathBuf::from(s.trim()))
+                    {
+                        if path.exists() {
+                            return Some(path);
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    /// 用 7za 创建标准分卷 ZIP 并逐个发送
+    fn send_with_7z_split(&self, seven_zip: &Path, files: &[PathBuf], _temp_dir: &Path, base_name: &str, result: &mut TaskResult) -> Result<()> {
+        use std::process::Command;
+
+        let part_size = self.config.notify.split_part_size;
+        let out_zip = self.config.temp_dir().join(format!("{}.zip", base_name));
+
+        // 清理旧分卷
+        let _ = std::fs::remove_file(&out_zip);
+        for i in 1..100 {
+            let _ = std::fs::remove_file(self.config.temp_dir().join(format!("{}.z{:02}", base_name, i)));
+        }
+
+        self.logger.info(&format!("用 7za 创建分卷 ZIP，单卷上限 {}", format_size(part_size)));
+
+        let mut cmd = Command::new(seven_zip);
+        cmd.arg("a")
+            .arg("-tzip")
+            .arg(format!("-v{}", part_size))
+            .arg("-mx=1") // 快速压缩
+            .arg(&out_zip);
+        for f in files {
+            cmd.arg(f);
+        }
+
+        let output = cmd.output()?;
+        if !output.status.success() {
+            anyhow::bail!("7za 执行失败: {}", String::from_utf8_lossy(&output.stderr));
+        }
+
+        // 收集分卷文件
+        let mut parts: Vec<PathBuf> = Vec::new();
+        if out_zip.exists() {
+            parts.push(out_zip.clone());
+        }
+        for i in 1..100 {
+            let part = self.config.temp_dir().join(format!("{}.z{:02}", base_name, i));
+            if part.exists() {
+                parts.push(part);
+            } else {
+                break;
+            }
+        }
+
+        if parts.is_empty() {
+            anyhow::bail!("7za 未生成分卷文件");
+        }
+
+        self.logger.info(&format!("生成 {} 个分卷", parts.len()));
+
+        // 逐个发送
+        let mut all_ok = true;
+        let mut sent = 0;
+        for (i, part) in parts.iter().enumerate() {
+            let size = std::fs::metadata(part)?.len();
+            self.logger.info(&format!("分卷 {}/{}: {}", i + 1, parts.len(), format_size(size)));
+
+            match self.notifier.send_file(part) {
+                Ok(_) => {
+                    self.logger.info(&format!("分卷 {} 发送成功", i + 1));
+                    sent += 1;
+                }
+                Err(e) => {
+                    self.logger.error(&format!("分卷 {} 发送失败: {}", i + 1, e));
+                    all_ok = false;
+                    result.error = Some(format!("分卷{}发送失败: {}", i + 1, e));
+                }
+            }
+            let _ = std::fs::remove_file(part);
+        }
+
+        result.send_type = format!("7z分卷({}/{})", sent, parts.len());
+        result.send_success = all_ok;
+        Ok(())
+    }
+
     /// 分片发送：按文件大小分组，每组打一个 zip，逐个 webhook 发送
     fn send_split_parts(&self, files: &[PathBuf], temp_dir: &Path, base_name: &str, result: &mut TaskResult) -> Result<()> {
+        // 优先用 7za 创建标准分卷 ZIP
+        if let Some(seven_zip) = self.find_7za() {
+            match self.send_with_7z_split(&seven_zip, files, temp_dir, base_name, result) {
+                Ok(()) => return Ok(()),
+                Err(e) => {
+                    self.logger.error(&format!("7za 分卷失败({})，回退到内置分片", e));
+                }
+            }
+        }
+
         let part_size = self.config.notify.split_part_size;
 
         // 按文件大小降序排序（贪心装箱，大的先放）
