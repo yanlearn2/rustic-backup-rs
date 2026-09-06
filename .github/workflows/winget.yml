@@ -45,6 +45,7 @@ jobs:
           $sha256 = "${{ steps.hash.outputs.sha256 }}"
           
           $manifest = @"
+          # yaml-language-server: $schema=https://aka.ms/winget-manifest.singleton.1.12.0.schema.json
           PackageIdentifier: yanlearn2.rustic-backup
           PackageVersion: $version
           PackageLocale: en-US
@@ -58,7 +59,7 @@ jobs:
               InstallerUrl: $asset
               InstallerSha256: $sha256
           ManifestType: singleton
-          ManifestVersion: 1.6.0
+          ManifestVersion: 1.12.0
           "@
           
           # 去掉前导空格（here-string 缩进问题）
