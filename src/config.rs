@@ -51,7 +51,7 @@ fn default_max_webhook_size() -> u64 {
     20 * 1024 * 1024
 }
 fn default_split_size() -> u64 {
-    18 * 1024 * 1024
+    15 * 1024 * 1024
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

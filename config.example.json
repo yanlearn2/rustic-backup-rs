@@ -1,14 +1,14 @@
-{
+﻿{
   "repo": {
     "path": "./repo",
-    "password": "请修改为你的仓库密码"
+    "password": "璇蜂慨鏀逛负浣犵殑浠撳簱瀵嗙爜"
   },
   "notify": {
-    "webhook": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=你的webhook-key",
+    "webhook": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=浣犵殑webhook-key",
     "wedrive_enabled": false,
     "max_webhook_size": 20971520,
     "split_large_files": true,
-    "split_part_size": 18874368
+    "split_part_size": 15728640
   },
   "retention": {
     "daily": 15,
@@ -18,8 +18,8 @@
   },
   "tasks": [
     {
-      "name": "检测数据",
-      "source": "\\\\nas\\质量部\\检测数据",
+      "name": "妫€娴嬫暟鎹?,
+      "source": "\\\\nas\\璐ㄩ噺閮╘\妫€娴嬫暟鎹?,
       "schedule": "daily",
       "time": "07:30",
       "include": [],
@@ -34,8 +34,8 @@
       "enabled": true
     },
     {
-      "name": "原辅料质量管理",
-      "source": "\\\\nas\\质量部\\01_原辅料质量管理",
+      "name": "鍘熻緟鏂欒川閲忕鐞?,
+      "source": "\\\\nas\\璐ㄩ噺閮╘\01_鍘熻緟鏂欒川閲忕鐞?,
       "schedule": "daily",
       "time": "07:30",
       "exclude": ["~$*"],
@@ -47,8 +47,8 @@
       "enabled": true
     },
     {
-      "name": "月度归档",
-      "source": "\\\\nas\\质量部\\月度报告",
+      "name": "鏈堝害褰掓。",
+      "source": "\\\\nas\\璐ㄩ噺閮╘\鏈堝害鎶ュ憡",
       "schedule": "monthly",
       "time": "02:00",
       "monthday": 1,

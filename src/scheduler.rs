@@ -373,15 +373,29 @@ impl<'a> Scheduler<'a> {
             let zip_size = std::fs::metadata(&zip_path).map(|m| m.len()).unwrap_or(0);
             self.logger.info(&format!("分片 {} 大小: {}", part_num, format_size(zip_size)));
 
-            match self.notifier.send_file(&zip_path) {
-                Ok(_) => {
-                    self.logger.info(&format!("分片 {} 发送成功", part_num));
+            let max_size = self.config.notify.max_webhook_size;
+
+            if zip_size > max_size {
+                // 单个分片仍超限，进行二进制拆分
+                self.logger.info(&format!("分片 {} 超过 {}，进行二进制拆分...", part_num, format_size(max_size)));
+                let ok = self.split_and_send_file(&zip_path, &zip_name, max_size, part_num, groups.len())?;
+                if !ok {
+                    all_success = false;
+                    result.error = Some(format!("分片{}拆分后发送失败", part_num));
+                } else {
                     sent_count += 1;
                 }
-                Err(e) => {
-                    self.logger.error(&format!("分片 {} 发送失败: {}", part_num, e));
-                    all_success = false;
-                    result.error = Some(format!("分片{}发送失败: {}", part_num, e));
+            } else {
+                match self.notifier.send_file(&zip_path) {
+                    Ok(_) => {
+                        self.logger.info(&format!("分片 {} 发送成功", part_num));
+                        sent_count += 1;
+                    }
+                    Err(e) => {
+                        self.logger.error(&format!("分片 {} 发送失败: {}", part_num, e));
+                        all_success = false;
+                        result.error = Some(format!("分片{}发送失败: {}", part_num, e));
+                    }
                 }
             }
 
@@ -392,6 +406,63 @@ impl<'a> Scheduler<'a> {
         result.send_success = all_success;
 
         Ok(())
+    }
+
+    /// 二进制拆分大文件并逐个发送
+    fn split_and_send_file(&self, file_path: &Path, base_name: &str, max_size: u64, part_num: usize, total_parts: usize) -> Result<bool> {
+        use std::io::{Read, Write};
+
+        let chunk_size = max_size - 1024 * 1024; // 留1MB余量
+        let mut file = std::fs::File::open(file_path)?;
+        let file_size = file.metadata()?.len();
+        let total_chunks = (file_size + chunk_size - 1) / chunk_size;
+
+        self.logger.info(&format!("拆分为 {} 个二进制块，每块上限 {}", total_chunks, format_size(chunk_size)));
+
+        let mut buffer = vec![0u8; chunk_size as usize];
+        let mut all_ok = true;
+
+        for i in 0..total_chunks {
+            let n = file.read(&mut buffer)?;
+            if n == 0 { break; }
+
+            let chunk_name = format!("{}_chunk{}_{}.bin", base_name, i + 1, total_chunks);
+            let chunk_path = self.config.temp_dir().join(&chunk_name);
+            {
+                let mut chunk_file = std::fs::File::create(&chunk_path)?;
+                chunk_file.write_all(&buffer[..n])?;
+            }
+
+            let chunk_size_actual = std::fs::metadata(&chunk_path)?.len();
+            self.logger.info(&format!("  二进制块 {}/{}: {}", i + 1, total_chunks, format_size(chunk_size_actual)));
+
+            match self.notifier.send_file(&chunk_path) {
+                Ok(_) => self.logger.info(&format!("  二进制块 {}/{} 发送成功", i + 1, total_chunks)),
+                Err(e) => {
+                    self.logger.error(&format!("  二进制块 {}/{} 发送失败: {}", i + 1, total_chunks, e));
+                    all_ok = false;
+                }
+            }
+
+            let _ = std::fs::remove_file(&chunk_path);
+        }
+
+        // 发送合并说明
+        if all_ok {
+            let readme_name = format!("{}_合并说明.txt", base_name);
+            let readme_path = self.config.temp_dir().join(&readme_name);
+            let readme_content = format!(
+                "文件拆分合并说明\n================\n\n原文件: {}\n大小: {}\n拆分块数: {}\n\n合并方法（Windows命令行）:\n  copy /b {}_chunk1_*.bin + {}_chunk2_*..bin + ... {}\n\n或使用 PowerShell:\n  Get-Content {}_chunk*.bin -Encoding Byte | Set-Content {} -Encoding Byte\n\n注意: 必须按序号顺序合并，合并后文件为 zip 格式，可直接解压。",
+                base_name, format_size(file_size), total_chunks,
+                base_name, base_name, base_name,
+                base_name, base_name
+            );
+            std::fs::write(&readme_path, readme_content)?;
+            let _ = self.notifier.send_file(&readme_path);
+            let _ = std::fs::remove_file(&readme_path);
+        }
+
+        Ok(all_ok)
     }
 
     /// 发送汇总报告
