@@ -51,6 +51,13 @@ pub struct RepoStats {
     pub snapshot_count: u64,
 }
 
+/// rustic 快照分组（v0.11.4+ 的 snapshots --json 输出格式）
+#[derive(Debug, Clone, Deserialize)]
+struct SnapshotGroup {
+    #[serde(default)]
+    snapshots: Vec<Snapshot>,
+}
+
 /// rustic 命令封装
 pub struct Rustic<'a> {
     config: &'a Config,
@@ -159,8 +166,13 @@ impl<'a> Rustic<'a> {
         if code != 0 {
             return Err(anyhow!("列出快照失败 (exit {}):\n{}", code, stderr));
         }
-        let mut snapshots: Vec<Snapshot> = serde_json::from_str(&stdout)
-            .with_context(|| format!("解析快照JSON失败: {}", stdout))?;
+        // 解析快照（v0.11.4+ 是分组格式，兼容旧版直接数组格式）
+        let mut snapshots: Vec<Snapshot> = if let Ok(groups) = serde_json::from_str::<Vec<SnapshotGroup>>(&stdout) {
+            groups.into_iter().flat_map(|g| g.snapshots).collect()
+        } else {
+            serde_json::from_str(&stdout)
+                .with_context(|| format!("解析快照JSON失败: {}", stdout))?
+        };
 
         // 应用层按 tag 过滤（所有 tag 都必须匹配，AND 逻辑）
         if !tags.is_empty() {
