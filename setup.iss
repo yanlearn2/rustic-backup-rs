@@ -39,6 +39,7 @@ Source: "dist\config.example.json"; DestDir: "{app}"; Flags: ignoreversion onlyi
 Source: "dist\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\bin\README.txt"; DestDir: "{app}\bin"; Flags: ignoreversion
 Source: "dist\bin\7za.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
+Source: "dist\bin\rustic.exe"; DestDir: "{app}\bin"; Flags: ignoreversion onlyifdoesntexist
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"
