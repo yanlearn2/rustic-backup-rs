@@ -177,13 +177,51 @@ impl Default for TaskNotifyConfig {
 }
 
 impl Config {
-    /// 从文件加载配置
+    /// 从文件加载配置（自动把相对路径解析为相对于配置文件所在目录的绝对路径）
     pub fn load(path: &Path) -> Result<Self> {
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("读取配置文件失败: {}", path.display()))?;
-        let config: Config = serde_json::from_str(&content)
+        let mut config: Config = serde_json::from_str(&content)
             .with_context(|| format!("解析配置文件失败: {}", path.display()))?;
+
+        // 配置文件所在目录，用于解析相对路径
+        let config_dir = path.parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("."));
+
+        config.resolve_paths(&config_dir);
         Ok(config)
+    }
+
+    /// 把所有相对路径解析为相对于 base_dir 的绝对路径
+    fn resolve_paths(&mut self, base_dir: &Path) {
+        // 仓库路径
+        self.repo.path = Self::resolve_abs(&self.repo.path, base_dir);
+
+        // 日志目录
+        if let Some(d) = &self.log_dir {
+            self.log_dir = Some(Self::resolve_abs(d, base_dir));
+        }
+
+        // rustic.exe 路径
+        if let Some(p) = &self.rustic_path {
+            self.rustic_path = Some(Self::resolve_abs(p, base_dir));
+        }
+
+        // 任务源路径
+        for task in &mut self.tasks {
+            task.source = Self::resolve_abs(&task.source, base_dir);
+        }
+    }
+
+    /// 把相对路径转为绝对路径（已经是绝对路径则不变）
+    fn resolve_abs(path: &str, base_dir: &Path) -> String {
+        let p = PathBuf::from(path);
+        if p.is_absolute() {
+            path.to_string()
+        } else {
+            base_dir.join(p).to_string_lossy().to_string()
+        }
     }
 
     /// 保存到文件
