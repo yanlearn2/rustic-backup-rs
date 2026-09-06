@@ -590,7 +590,9 @@ impl<'a> Scheduler<'a> {
         let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
         let total_files: u64 = results.iter().map(|r| r.files_scanned).sum();
         let total_size: u64 = results.iter().map(|r| r.files_size).sum();
+        let total_changed: u64 = results.iter().map(|r| r.changed_files.len() as u64).sum();
         let all_success = results.iter().all(|r| r.success);
+        let all_no_change = total_changed == 0 && results.iter().all(|r| !r.is_first_run);
 
         let status_emoji = if all_success { "✅" } else { "⚠️" };
         let mut lines = Vec::new();
@@ -599,8 +601,12 @@ impl<'a> Scheduler<'a> {
         lines.push(format!("**📅 备份时间**: {}", now));
         lines.push(String::new());
         lines.push("**📊 备份统计**".to_string());
-        lines.push(format!("> 扫描文件: {} 个", total_files));
-        lines.push(format!("> 总大小: {}", format_size(total_size)));
+        if all_no_change {
+            lines.push("> 全部无变化".to_string());
+        } else {
+            lines.push(format!("> 扫描文件: {} 个 / 总大小: {}", total_files, format_size(total_size)));
+            lines.push(format!("> 变化文件: {} 个", total_changed));
+        }
         lines.push(String::new());
         lines.push("**📂 各任务详情**".to_string());
 
@@ -611,7 +617,13 @@ impl<'a> Scheduler<'a> {
             let send_emoji = if r.send_success { "✅" } else { "❌" };
             let status = if r.success { "成功" } else { "失败" };
 
-            lines.push(format!("> **{}**: {} ({}个/{})", r.task_name, status, r.files_scanned, format_size(r.files_size)));
+            // 任务状态行：无变化时显示"无变化"，有变化时显示文件数和大小
+            let detail = if r.changed_files.is_empty() && !r.is_first_run {
+                "无变化".to_string()
+            } else {
+                format!("{}个/{}", r.files_scanned, format_size(r.files_size))
+            };
+            lines.push(format!("> **{}**: {} ({})", r.task_name, status, detail));
             lines.push(format!(">   发送: {} {} | 快照: {}", r.send_type, send_emoji, snap_short));
 
             if r.is_first_run {
