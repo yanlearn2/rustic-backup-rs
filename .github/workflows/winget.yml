@@ -26,29 +26,57 @@ jobs:
           echo "Version: $version"
           echo "Asset: $asset"
 
+      - name: Download installer and compute hash
+        id: hash
+        shell: pwsh
+        run: |
+          $asset = "${{ steps.release.outputs.asset }}"
+          $out = "RusticBackup-Setup.exe"
+          Invoke-WebRequest -Uri $asset -OutFile $out -UseBasicParsing
+          $sha256 = (Get-FileHash $out -Algorithm SHA256).Hash.ToLower()
+          echo "sha256=$sha256" >> $env:GITHUB_OUTPUT
+          echo "SHA256: $sha256"
+
+      - name: Generate manifest
+        shell: pwsh
+        run: |
+          $version = "${{ steps.release.outputs.version }}"
+          $asset = "${{ steps.release.outputs.asset }}"
+          $sha256 = "${{ steps.hash.outputs.sha256 }}"
+          
+          $manifest = @"
+          PackageIdentifier: yanlearn2.rustic-backup
+          PackageVersion: $version
+          PackageLocale: en-US
+          Publisher: yanlearn2
+          PackageName: Rustic Backup
+          License: MIT
+          ShortDescription: Incremental backup tool based on rustic with WeCom notification
+          Installers:
+            - Architecture: x64
+              InstallerType: inno
+              InstallerUrl: $asset
+              InstallerSha256: $sha256
+          ManifestType: singleton
+          ManifestVersion: 1.6.0
+          "@
+          
+          # 去掉前导空格（here-string 缩进问题）
+          $manifest = $manifest -replace "(?m)^          ", ""
+          
+          New-Item -ItemType Directory -Path manifest -Force | Out-Null
+          $manifest | Out-File -FilePath "manifest\yanlearn2.rustic-backup.yaml" -Encoding utf8 -NoNewline
+          Get-Content "manifest\yanlearn2.rustic-backup.yaml"
+
       - name: Install wingetcreate
         shell: pwsh
         run: |
           $url = "https://github.com/microsoft/winget-create/releases/latest/download/wingetcreate.exe"
           Invoke-WebRequest -Uri $url -OutFile "wingetcreate.exe" -UseBasicParsing
-          echo "wingetcreate downloaded"
 
-      - name: Generate and submit manifest
+      - name: Submit to winget-pkgs
         shell: pwsh
         env:
           WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
         run: |
-          $version = "${{ steps.release.outputs.version }}"
-          $asset = "${{ steps.release.outputs.asset }}"
-          
-          .\wingetcreate.exe new `
-            --url $asset `
-            --package-identifier "yanlearn2.rustic-backup" `
-            --version $version `
-            --publisher "yanlearn2" `
-            --package-name "Rustic Backup" `
-            --license "MIT" `
-            --short-description "Incremental backup tool based on rustic with WeCom notification" `
-            --token $env:WINGET_TOKEN `
-            --submit `
-            --out .\manifest
+          .\wingetcreate.exe submit --token $env:WINGET_TOKEN --no-open "manifest\yanlearn2.rustic-backup.yaml"
