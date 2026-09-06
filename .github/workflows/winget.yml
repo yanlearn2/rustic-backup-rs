@@ -48,21 +48,22 @@ jobs:
           New-Item -ItemType Directory -Path "manifest" -Force | Out-Null
 
           # 1. Version manifest
-          $versionManifest = @"
-          # yaml-language-server: ``$schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json
+          $versionManifest = @'
+          # yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json
           PackageIdentifier: yanlearn2.rustic-backup
-          PackageVersion: $version
+          PackageVersion: {0}
           DefaultLocale: en-US
           ManifestType: version
           ManifestVersion: 1.12.0
-          "@ -replace "(?m)^          ", ""
+          '@ -f $version
+          $versionManifest = $versionManifest -replace "(?m)^          ", ""
           [System.IO.File]::WriteAllText("manifest\yanlearn2.rustic-backup.yaml", $versionManifest, $utf8NoBom)
 
           # 2. Locale manifest
-          $localeManifest = @"
-          # yaml-language-server: ``$schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
+          $localeManifest = @'
+          # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
           PackageIdentifier: yanlearn2.rustic-backup
-          PackageVersion: $version
+          PackageVersion: {0}
           PackageLocale: en-US
           Publisher: yanlearn2
           PublisherUrl: https://github.com/yanlearn2
@@ -78,14 +79,15 @@ jobs:
             - wecom
           ManifestType: defaultLocale
           ManifestVersion: 1.12.0
-          "@ -replace "(?m)^          ", ""
+          '@ -f $version
+          $localeManifest = $localeManifest -replace "(?m)^          ", ""
           [System.IO.File]::WriteAllText("manifest\yanlearn2.rustic-backup.locale.en-US.yaml", $localeManifest, $utf8NoBom)
 
           # 3. Installer manifest
-          $installerManifest = @"
-          # yaml-language-server: ``$schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
+          $installerManifest = @'
+          # yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
           PackageIdentifier: yanlearn2.rustic-backup
-          PackageVersion: $version
+          PackageVersion: {0}
           InstallerLocale: en-US
           InstallerType: inno
           InstallModes:
@@ -94,11 +96,12 @@ jobs:
             - silentWithProgress
           Installers:
             - Architecture: x64
-              InstallerUrl: $asset
-              InstallerSha256: $sha256
+              InstallerUrl: {1}
+              InstallerSha256: {2}
           ManifestType: installer
           ManifestVersion: 1.12.0
-          "@ -replace "(?m)^          ", ""
+          '@ -f $version, $asset, $sha256
+          $installerManifest = $installerManifest -replace "(?m)^          ", ""
           [System.IO.File]::WriteAllText("manifest\yanlearn2.rustic-backup.installer.yaml", $installerManifest, $utf8NoBom)
 
           echo "=== Generated manifests ==="
