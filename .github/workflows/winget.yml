@@ -44,10 +44,9 @@ jobs:
           $asset = "${{ steps.release.outputs.asset }}"
           $sha256 = "${{ steps.hash.outputs.sha256 }}"
           
-          $manifest = @'
-          # yaml-language-server: $schema=https://aka.ms/winget-manifest.singleton.1.12.0.schema.json
+          $manifest = @"
           PackageIdentifier: yanlearn2.rustic-backup
-          PackageVersion: {0}
+          PackageVersion: $version
           PackageLocale: en-US
           Publisher: yanlearn2
           PackageName: Rustic Backup
@@ -56,17 +55,18 @@ jobs:
           Installers:
             - Architecture: x64
               InstallerType: inno
-              InstallerUrl: {1}
-              InstallerSha256: {2}
+              InstallerUrl: $asset
+              InstallerSha256: $sha256
           ManifestType: singleton
           ManifestVersion: 1.12.0
-          '@ -f $version, $asset, $sha256
+          "@
           
           # 去掉前导空格
           $manifest = $manifest -replace "(?m)^          ", ""
           
           New-Item -ItemType Directory -Path manifest -Force | Out-Null
-          $manifest | Out-File -FilePath "manifest\yanlearn2.rustic-backup.yaml" -Encoding utf8 -NoNewline
+          # 用 UTF-8 无 BOM 编码写入
+          [System.IO.File]::WriteAllText("manifest\yanlearn2.rustic-backup.yaml", $manifest, (New-Object System.Text.UTF8Encoding $false))
           Get-Content "manifest\yanlearn2.rustic-backup.yaml"
 
       - name: Install wingetcreate
