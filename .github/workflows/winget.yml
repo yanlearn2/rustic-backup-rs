@@ -31,44 +31,76 @@ jobs:
         shell: pwsh
         run: |
           $asset = "${{ steps.release.outputs.asset }}"
-          $out = "RusticBackup-Setup.exe"
-          Invoke-WebRequest -Uri $asset -OutFile $out -UseBasicParsing
-          $sha256 = (Get-FileHash $out -Algorithm SHA256).Hash.ToLower()
+          Invoke-WebRequest -Uri $asset -OutFile "RusticBackup-Setup.exe" -UseBasicParsing
+          $sha256 = (Get-FileHash "RusticBackup-Setup.exe" -Algorithm SHA256).Hash.ToLower()
           echo "sha256=$sha256" >> $env:GITHUB_OUTPUT
           echo "SHA256: $sha256"
 
-      - name: Generate manifest
+      - name: Generate manifests (multi-file format)
         shell: pwsh
         run: |
           $version = "${{ steps.release.outputs.version }}"
           $asset = "${{ steps.release.outputs.asset }}"
           $sha256 = "${{ steps.hash.outputs.sha256 }}"
-          
-          $manifest = @"
-          # yaml-language-server: `$schema=https://aka.ms/winget-manifest.singleton.1.12.0.schema.json
+          $utf8NoBom = New-Object System.Text.UTF8Encoding $false
+
+          # 1. Version manifest
+          $versionManifest = @"
+          # yaml-language-server: ``$schema=https://aka.ms/winget-manifest.version.1.12.0.schema.json
+          PackageIdentifier: yanlearn2.rustic-backup
+          PackageVersion: $version
+          DefaultLocale: en-US
+          ManifestType: version
+          ManifestVersion: 1.12.0
+          "@ -replace "(?m)^          ", ""
+          [System.IO.File]::WriteAllText("manifest\yanlearn2.rustic-backup.yaml", $versionManifest, $utf8NoBom)
+
+          # 2. Locale manifest
+          New-Item -ItemType Directory -Path "manifest\Locale" -Force | Out-Null
+          $localeManifest = @"
+          # yaml-language-server: ``$schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
           PackageIdentifier: yanlearn2.rustic-backup
           PackageVersion: $version
           PackageLocale: en-US
           Publisher: yanlearn2
+          PublisherUrl: https://github.com/yanlearn2
           PackageName: Rustic Backup
+          PackageUrl: https://github.com/yanlearn2/rustic-backup-rs
           License: MIT
+          LicenseUrl: https://github.com/yanlearn2/rustic-backup-rs/blob/main/LICENSE
           ShortDescription: Incremental backup tool based on rustic with WeCom notification
+          Tags:
+            - backup
+            - rustic
+            - incremental
+            - wecom
+          ManifestType: defaultLocale
+          ManifestVersion: 1.12.0
+          "@ -replace "(?m)^          ", ""
+          [System.IO.File]::WriteAllText("manifest\Locale\en-US.yaml", $localeManifest, $utf8NoBom)
+
+          # 3. Installer manifest
+          $installerManifest = @"
+          # yaml-language-server: ``$schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
+          PackageIdentifier: yanlearn2.rustic-backup
+          PackageVersion: $version
+          InstallerLocale: en-US
+          InstallerType: inno
+          InstallModes:
+            - interactive
+            - silent
+            - silentWithProgress
           Installers:
             - Architecture: x64
-              InstallerType: inno
               InstallerUrl: $asset
               InstallerSha256: $sha256
-          ManifestType: singleton
+          ManifestType: installer
           ManifestVersion: 1.12.0
-          "@
-          
-          # 去掉前导空格
-          $manifest = $manifest -replace "(?m)^          ", ""
-          
-          New-Item -ItemType Directory -Path manifest -Force | Out-Null
-          # 用 UTF-8 无 BOM 编码写入
-          [System.IO.File]::WriteAllText("manifest\yanlearn2.rustic-backup.yaml", $manifest, (New-Object System.Text.UTF8Encoding $false))
-          Get-Content "manifest\yanlearn2.rustic-backup.yaml"
+          "@ -replace "(?m)^          ", ""
+          [System.IO.File]::WriteAllText("manifest\Installer.yaml", $installerManifest, $utf8NoBom)
+
+          echo "=== Generated manifests ==="
+          Get-ChildItem -Recurse manifest | ForEach-Object { $_.FullName }
 
       - name: Install wingetcreate
         shell: pwsh
