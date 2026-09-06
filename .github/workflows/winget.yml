@@ -1,0 +1,54 @@
+name: Publish to WinGet
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  winget:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get release info
+        id: release
+        shell: pwsh
+        run: |
+          $tag = "${{ github.event.release.tag_name }}"
+          $version = $tag -replace '^v', ''
+          $asset = "${{ github.event.release.assets[0].browser_download_url }}"
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "asset=$asset" >> $env:GITHUB_OUTPUT
+          echo "Version: $version"
+          echo "Asset: $asset"
+
+      - name: Install wingetcreate
+        shell: pwsh
+        run: |
+          $url = "https://github.com/microsoft/winget-create/releases/latest/download/wingetcreate.exe"
+          Invoke-WebRequest -Uri $url -OutFile "wingetcreate.exe" -UseBasicParsing
+          .\wingetcreate.exe --version
+
+      - name: Generate and submit manifest
+        shell: pwsh
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          $version = "${{ steps.release.outputs.version }}"
+          $asset = "${{ steps.release.outputs.asset }}"
+          
+          .\wingetcreate.exe new `
+            --url $asset `
+            --package-identifier "yanlearn2.rustic-backup" `
+            --version $version `
+            --publisher "yanlearn2" `
+            --package-name "Rustic Backup" `
+            --license "MIT" `
+            --short-description "Incremental backup tool based on rustic with WeCom notification" `
+            --token $env:WINGET_TOKEN `
+            --submit `
+            --out .\manifest
